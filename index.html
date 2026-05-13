@@ -2,136 +2,118 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>公司會議室預約系統 - 雲端版</title>
+    <title>會議室預約系統</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        :root { --color-primary: #185fa5; --color-bg: #f5f5f5; }
-        body { font-family: 'Segoe UI', sans-serif; background: var(--color-bg); padding: 20px; }
-        .app { max-width: 1000px; margin: 0 auto; background: white; border-radius: 12px; padding: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-        table { width: 100%; border-collapse: collapse; }
-        th, td { border: 1px solid #ddd; padding: 10px; text-align: center; }
-        .time-th { width: 80px; background: #f9f9f9; font-weight: bold; }
-        .booking-block { background: #e6f1fb; color: #185fa5; padding: 5px; border-radius: 4px; font-size: 12px; }
-        .btn { padding: 8px 16px; border-radius: 6px; cursor: pointer; border: 1px solid #ddd; background: white; }
-        .btn-primary { background: var(--color-primary); color: white; border: none; }
-        /* 彈窗簡單樣式 */
-        #modal { display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); background:white; padding:25px; border-radius:12px; box-shadow:0 0 20px rgba(0,0,0,0.3); z-index:100; }
+        body { font-family: sans-serif; padding: 20px; background: #f0f2f5; }
+        .container { max-width: 900px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 12px; text-align: center; }
+        th { background: #185fa5; color: white; }
+        .booking-info { background: #e7f3ff; color: #185fa5; border-radius: 4px; padding: 4px; font-size: 13px; }
+        .add-btn { color: #ccc; cursor: pointer; font-size: 20px; }
+        #modal { display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:white; padding:30px; box-shadow:0 0 15px rgba(0,0,0,0.2); border-radius:10px; z-index:100; }
     </style>
 </head>
 <body>
 
-<div class="app">
-    <div class="header">
-        <h2>會議室預約系統 <span id="status" style="font-size:12px; color:gray;">● 連線中...</span></h2>
+<div class="container">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+        <h2>會議室預約 <span id="conn-status" style="font-size:14px; color:orange;">(連線中...)</span></h2>
         <div>
-            <button class="btn" onclick="changeDate(-1)">前一天</button>
-            <span id="dateDisplay" style="font-weight:bold; margin:0 10px;"></span>
-            <button class="btn" onclick="changeDate(1)">後一天</button>
+            <button onclick="changeDate(-1)">前一天</button>
+            <span id="dateText" style="font-weight:bold; margin:0 10px;"></span>
+            <button onclick="changeDate(1)">後一天</button>
         </div>
     </div>
-    <div id="tableContainer"></div>
+    <div id="grid"></div>
 </div>
 
 <div id="modal">
-    <h3 style="margin-bottom:15px">新增預約</h3>
-    <input type="text" id="userName" placeholder="預約人姓名" style="width:100%; padding:8px; margin-bottom:10px;"><br>
-    <input type="text" id="dept" placeholder="部門" style="width:100%; padding:8px; margin-bottom:10px;"><br>
-    <button class="btn" onclick="closeModal()">取消</button>
-    <button class="btn btn-primary" onclick="submitBooking()">送出</button>
+    <h3>新增預約</h3>
+    <p>姓名: <input type="text" id="u-name"></p>
+    <p>部門: <input type="text" id="u-dept"></p>
+    <button onclick="save()">確認</button>
+    <button onclick="document.getElementById('modal').style.display='none'">取消</button>
 </div>
 
 <script>
-    // 🚀 請在此貼上你的真實資訊
-    const CONFIG = {
-        URL: 'https://twaxasvswqlyuaxlxtit.supabase.co',
-        KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVwYm1kanhyeGFwaXBqd21yamd6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2NTQ4NzgsImV4cCI6MjA5NDIzMDg3OH0.C7pm4ID71D8X5lil5N9eugaGWitnSp8WsNOc7bkRyqw'
-    };
+    // 這裡請務必填寫正確，不要刪掉單引號 ''
+    const URL = 'https://twaxasvswqlyuaxlxtit.supabase.co';
+    const KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVwYm1kanhyeGFwaXBqd21yamd6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2NTQ4NzgsImV4cCI6MjA5NDIzMDg3OH0.C7pm4ID71D8X5lil5N9eugaGWitnSp8WsNOc7bkRyqw';
 
-    let db;
-    let currentDate = new Date().toISOString().split('T')[0];
-    let selectedCell = null;
+    let client;
+    let today = new Date().toISOString().split('T')[0];
+    let activeCell = null;
+
     const ROOMS = ['第一會議室', '第二會議室', '第三會議室'];
-    const SLOTS = ["09:00", "09:30", "10:00", "10:30", "11:00", "11:30", "13:00", "13:30", "14:00", "14:30", "15:00", "15:30", "16:00", "16:30", "17:00"];
+    const TIMES = ["09:00", "10:00", "11:00", "13:00", "14:00", "15:00", "16:00", "17:00"];
 
-    // 啟動連線
-    function startApp() {
+    function init() {
         if (typeof supabase !== 'undefined') {
-            db = supabase.createClient(CONFIG.URL, CONFIG.KEY);
-            document.getElementById('status').innerText = '● 雲端連線正常';
-            document.getElementById('status').style.color = '#2ecc71';
-            render();
+            client = supabase.createClient(URL, KEY);
+            document.getElementById('conn-status').innerText = '● 雲端已連線';
+            document.getElementById('conn-status').style.color = 'green';
+            load();
         } else {
-            setTimeout(startApp, 300);
+            setTimeout(init, 300);
         }
     }
 
-    async function render() {
-        document.getElementById('dateDisplay').innerText = currentDate;
-        const container = document.getElementById('tableContainer');
-        container.innerHTML = '載入中...';
-
-        // 讀取資料 (注意：你的表格叫 booking)
-        const { data, error } = await db.from('booking').select('*').eq('date', currentDate);
+    async function load() {
+        document.getElementById('dateText').innerText = today;
+        const { data, error } = await client.from('booking').select('*').eq('date', today);
         
-        let html = '<table><thead><tr><th class="time-th">時間</th>';
-        ROOMS.forEach(r => html += `<th>${r}</th>`);
-        html += '</tr></thead><tbody>';
-
-        SLOTS.forEach(slot => {
-            html += `<tr><td class="time-th">${slot}</td>`;
-            ROOMS.forEach((room, idx) => {
-                const info = data?.find(b => b.room_idx === idx && b.start_slot === slot);
-                if (info) {
-                    html += `<td><div class="booking-block">${info.dept}<br>${info.user_name}</div></td>`;
+        let tableHtml = '<table><tr><th>時間</th>' + ROOMS.map(r => `<th>${r}</th>`).join('') + '</tr>';
+        
+        TIMES.forEach(t => {
+            tableHtml += `<tr><td>${t}</td>`;
+            ROOMS.forEach((r, idx) => {
+                const item = data?.find(d => d.room_idx === idx && d.start_slot === t);
+                if (item) {
+                    tableHtml += `<td><div class="booking-info">${item.dept}<br>${item.user_name}</div></td>`;
                 } else {
-                    html += `<td onclick="openModal(${idx}, '${slot}')" style="cursor:pointer; color:#eee;">+</td>`;
+                    tableHtml += `<td class="add-btn" onclick="pop(${idx}, '${t}')">+</td>`;
                 }
             });
-            html += '</tr>';
+            tableHtml += '</tr>';
         });
-        html += '</tbody></table>';
-        container.innerHTML = html;
+        document.getElementById('grid').innerHTML = tableHtml + '</table>';
     }
 
-    function openModal(idx, slot) {
-        selectedCell = { idx, slot };
+    function pop(idx, t) {
+        activeCell = { idx, t };
         document.getElementById('modal').style.display = 'block';
     }
 
-    function closeModal() {
-        document.getElementById('modal').style.display = 'none';
-    }
+    async function save() {
+        const name = document.getElementById('u-name').value;
+        const dept = document.getElementById('u-dept').value;
+        if(!name || !dept) return alert('請填寫完整');
 
-    async function submitBooking() {
-        const u = document.getElementById('userName').value;
-        const d = document.getElementById('dept').value;
-        if(!u || !d) return alert('請填寫完整資訊');
-
-        const { error } = await db.from('booking').insert([{
-            room_idx: selectedCell.idx,
-            date: currentDate,
-            start_slot: selectedCell.slot,
-            user_name: u,
-            dept: d
+        const { error } = await client.from('booking').insert([{
+            room_idx: activeCell.idx,
+            date: today,
+            start_slot: activeCell.t,
+            user_name: name,
+            dept: dept
         }]);
 
-        if (error) alert('預約失敗：' + error.message);
+        if (error) alert('失敗: ' + error.message);
         else {
-            closeModal();
-            render();
+            document.getElementById('modal').style.display = 'none';
+            load();
         }
     }
 
     function changeDate(n) {
-        let d = new Date(currentDate);
+        let d = new Date(today);
         d.setDate(d.getDate() + n);
-        currentDate = d.toISOString().split('T')[0];
-        render();
+        today = d.toISOString().split('T')[0];
+        load();
     }
 
-    startApp();
+    init();
 </script>
 </body>
 </html>
