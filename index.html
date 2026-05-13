@@ -3,95 +3,135 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>公司會議室預約系統 - 雲端同步版</title>
+    <title>公司會議室預約系統 - 雲端版</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        /* 這裡保留你原本 v3 版本的 CSS 樣式 */
-        :root {
-            --color-background-primary: #ffffff;
-            --color-text-primary: #1a1a1a;
-        }
-        *{box-sizing:border-box;margin:0;padding:0}
-        body{font-family:'Segoe UI',sans-serif;background:#f5f5f5;color:var(--color-text-primary);padding:20px}
-        .app{max-width:1200px;margin:0 auto}
-        .header{background:#fff;padding:1rem;border-radius:12px;margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center;border:1px solid #ddd}
-        table{width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 5px rgba(0,0,0,0.1)}
-        th,td{border:1px solid #eee;padding:12px;text-align:center}
-        .time-th{background:#f8f9fa;width:100px;font-weight:bold}
-        .booking-block{background:#e6f1fb;color:#185fa5;padding:4px;border-radius:4px;font-size:12px;cursor:pointer}
-        /* 簡化版樣式，實際建議保留原本完整的 CSS */
+        :root { --color-primary: #185fa5; --color-bg: #f5f5f5; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--color-bg); padding: 20px; }
+        .app { max-width: 1000px; margin: 0 auto; background: white; border-radius: 12px; padding: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: center; }
+        .time-th { width: 80px; background: #f9f9f9; font-weight: bold; }
+        .booking-block { background: #e6f1fb; color: #185fa5; padding: 5px; border-radius: 4px; font-size: 12px; }
+        .btn { padding: 8px 16px; border-radius: 6px; cursor: pointer; border: 1px solid #ddd; background: white; }
+        .btn-primary { background: var(--color-primary); color: white; border: none; }
+        /* 彈窗簡單樣式 */
+        #modal { display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); background:white; padding:25px; border-radius:12px; box-shadow:0 0 20px rgba(0,0,0,0.3); z-index:100; }
     </style>
 </head>
 <body>
 
 <div class="app">
     <div class="header">
-        <h1>會議室預約系統 <span style="font-size: 12px; color: green;">● 雲端已連線</span></h1>
-        <div id="dateDisplay">載入中...</div>
+        <h2>會議室預約系統 <span id="status" style="font-size:12px; color:gray;">● 連線中...</span></h2>
+        <div>
+            <button class="btn" onclick="changeDate(-1)">前一天</button>
+            <span id="dateDisplay" style="font-weight:bold; margin:0 10px;"></span>
+            <button class="btn" onclick="changeDate(1)">後一天</button>
+        </div>
     </div>
     <div id="tableContainer"></div>
 </div>
 
+<div id="modal">
+    <h3 style="margin-bottom:15px">新增預約</h3>
+    <input type="text" id="userName" placeholder="預約人姓名" style="width:100%; padding:8px; margin-bottom:10px;"><br>
+    <input type="text" id="dept" placeholder="部門" style="width:100%; padding:8px; margin-bottom:10px;"><br>
+    <button class="btn" onclick="closeModal()">取消</button>
+    <button class="btn btn-primary" onclick="submitBooking()">送出</button>
+</div>
+
 <script>
-    // 1. 請填入你的 Supabase 資訊
-    const DB_URL = 'https://twaxasvswqlyuaxlxtit.supabase.co';
-    const DB_KEY = = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVwYm1kanhyeGFwaXBqd21yamd6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2NTQ4NzgsImV4cCI6MjA5NDIzMDg3OH0.C7pm4ID71D8X5lil5N9eugaGWitnSp8WsNOc7bkRyqw';
-    const db = supabase.createClient(DB_URL, DB_KEY);
+    // 🚀 請在此貼上你的真實資訊
+    const CONFIG = {
+        URL: 'https://twaxasvswqlyuaxlxtit.supabase.co',
+        KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVwYm1kanhyeGFwaXBqd21yamd6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2NTQ4NzgsImV4cCI6MjA5NDIzMDg3OH0.C7pm4ID71D8X5lil5N9eugaGWitnSp8WsNOc7bkRyqw'
+    };
 
-    const ROOMS = ['第一會議室', '第二會議室', '第三會議室'];
+    let db;
     let currentDate = new Date().toISOString().split('T')[0];
+    let selectedCell = null;
+    const ROOMS = ['第一會議室', '第二會議室', '第三會議室'];
+    const SLOTS = ["09:00", "09:30", "10:00", "10:30", "11:00", "11:30", "13:00", "13:30", "14:00", "14:30", "15:00", "15:30", "16:00", "16:30", "17:00"];
 
-    // 2. 從 Supabase 讀取預約紀錄
-    async function fetchBookings() {
-        const { data, error } = await db
-            .from('bookings')
-            .select('*')
-            .eq('date', currentDate);
-
-        if (error) {
-            console.error('讀取失敗:', error);
-            return [];
-        }
-        return data;
-    }
-
-    // 3. 提交預約到 Supabase
-    async function addBooking(newBooking) {
-        const { data, error } = await db
-            .from('bookings')
-            .insert([
-                {
-                    room_idx: newBooking.roomIdx,
-                    date: currentDate,
-                    start_slot: newBooking.startSlot,
-                    end_slot: newBooking.endSlot,
-                    dept: newBooking.dept,
-                    user_name: newBooking.userName,
-                    purpose: newBooking.purpose,
-                    recur_type: 'once'
-                }
-            ]);
-
-        if (error) {
-            alert('預約失敗：' + error.message);
+    // 啟動連線
+    function startApp() {
+        if (typeof supabase !== 'undefined') {
+            db = supabase.createClient(CONFIG.URL, CONFIG.KEY);
+            document.getElementById('status').innerText = '● 雲端連線正常';
+            document.getElementById('status').style.color = '#2ecc71';
+            render();
         } else {
-            alert('預約成功！');
-            renderTable(); // 重新整理畫面
+            setTimeout(startApp, 300);
         }
     }
 
-    // 4. 渲染表格邏輯 (串接資料庫數據)
-    async function renderTable() {
-        const bookings = await fetchBookings();
-        document.getElementById('dateDisplay').innerText = `目前日期: ${currentDate}`;
+    async function render() {
+        document.getElementById('dateDisplay').innerText = currentDate;
+        const container = document.getElementById('tableContainer');
+        container.innerHTML = '載入中...';
+
+        // 讀取資料 (注意：你的表格叫 booking)
+        const { data, error } = await db.from('booking').select('*').eq('date', currentDate);
         
-        // 這裡會放置原本 V3 的表格生成邏輯，但資料來源改為 bookings 變數
-        console.log('當前雲端預約資料:', bookings);
-        // ... (省略部分渲染邏輯以保持長度，建議將 V3 的 render 函式貼回此處並修改資料來源)
+        let html = '<table><thead><tr><th class="time-th">時間</th>';
+        ROOMS.forEach(r => html += `<th>${r}</th>`);
+        html += '</tr></thead><tbody>';
+
+        SLOTS.forEach(slot => {
+            html += `<tr><td class="time-th">${slot}</td>`;
+            ROOMS.forEach((room, idx) => {
+                const info = data?.find(b => b.room_idx === idx && b.start_slot === slot);
+                if (info) {
+                    html += `<td><div class="booking-block">${info.dept}<br>${info.user_name}</div></td>`;
+                } else {
+                    html += `<td onclick="openModal(${idx}, '${slot}')" style="cursor:pointer; color:#eee;">+</td>`;
+                }
+            });
+            html += '</tr>';
+        });
+        html += '</tbody></table>';
+        container.innerHTML = html;
     }
 
-    renderTable();
-</script>
+    function openModal(idx, slot) {
+        selectedCell = { idx, slot };
+        document.getElementById('modal').style.display = 'block';
+    }
 
+    function closeModal() {
+        document.getElementById('modal').style.display = 'none';
+    }
+
+    async function submitBooking() {
+        const u = document.getElementById('userName').value;
+        const d = document.getElementById('dept').value;
+        if(!u || !d) return alert('請填寫完整資訊');
+
+        const { error } = await db.from('booking').insert([{
+            room_idx: selectedCell.idx,
+            date: currentDate,
+            start_slot: selectedCell.slot,
+            user_name: u,
+            dept: d
+        }]);
+
+        if (error) alert('預約失敗：' + error.message);
+        else {
+            closeModal();
+            render();
+        }
+    }
+
+    function changeDate(n) {
+        let d = new Date(currentDate);
+        d.setDate(d.getDate() + n);
+        currentDate = d.toISOString().split('T')[0];
+        render();
+    }
+
+    startApp();
+</script>
 </body>
 </html>
