@@ -34,16 +34,16 @@
 
 <script>
     // 1. 請填入你的 Supabase 資訊
-    const SUPABASE_URL = 'https://twaxasvswqlyuaxlxtit.supabase.co';
-    const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVwYm1kanhyeGFwaXBqd21yamd6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2NTQ4NzgsImV4cCI6MjA5NDIzMDg3OH0.C7pm4ID71D8X5lil5N9eugaGWitnSp8WsNOc7bkRyqw';
-    const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    const DB_URL = 'https://twaxasvswqlyuaxlxtit.supabase.co';
+    const DB_KEY = = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVwYm1kanhyeGFwaXBqd21yamd6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2NTQ4NzgsImV4cCI6MjA5NDIzMDg3OH0.C7pm4ID71D8X5lil5N9eugaGWitnSp8WsNOc7bkRyqw';
+    const db = supabase.createClient(DB_URL, DB_KEY);
 
     const ROOMS = ['第一會議室', '第二會議室', '第三會議室'];
     let currentDate = new Date().toISOString().split('T')[0];
 
     // 2. 從 Supabase 讀取預約紀錄
     async function fetchBookings() {
-        const { data, error } = await supabase
+        const { data, error } = await db
             .from('bookings')
             .select('*')
             .eq('date', currentDate);
@@ -57,7 +57,7 @@
 
     // 3. 提交預約到 Supabase
     async function addBooking(newBooking) {
-        const { data, error } = await supabase
+        const { data, error } = await db
             .from('bookings')
             .insert([
                 {
